@@ -1,35 +1,37 @@
 ﻿using AuditLogging.Core.Config;
+using AuditLogging.Core.Factories;
+using AuditLogging.Core.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace AuditLogging.Contexts.Interceptors
 {
-    public class AuditSaveChangesInterceptor(IServiceProvider services) : SaveChangesInterceptor
+    public class AuditSaveChangesInterceptor(IAuditLogFactory auditLogFactory) : SaveChangesInterceptor
     {
-        public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
-            var ctx = eventData.Context;
+            var ctx = eventData.Context!;
             // for 1st audit row 
             var addedEntries = ctx
                 .ChangeTracker
                 .Entries()
-                .Where(x => x.State == EntityState.Added);
+                .Where(x => x.State is EntityState.Added or EntityState.Modified);
 
-            foreach ( var entry in addedEntries )
+            List<AuditLogEntry> entries = [];
+            foreach (var entry in addedEntries)
             {
-                entry.
                 // тут надо будет своротить некую фабрику с кастами в конкретный генерик тайп
-                services.GetServices<AuditConfig>
+                auditLogFactory.TryLog(entry, out var log);
+
+                if (log != null)
+                {
+                    entries.Add(log);
+                }
             }
 
-            var modifiedEntries = ctx
-                .ChangeTracker
-                .Entries()
-                .Where(x => x.State == EntityState.Modified);
+            await ctx.Set<AuditLogEntry>().AddRangeAsync(entries);
 
-
-
-            return base.SavingChanges(eventData, result);
+            return await base.SavingChangesAsync(eventData, result, cancellationToken);
         }
     }
 }

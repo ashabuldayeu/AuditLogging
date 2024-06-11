@@ -2,20 +2,24 @@
 
 namespace AuditLogging.Core.Config
 {
-    public class AuditConfig<TEntity> 
+    public class EntityAuditProvider<TEntity> : IEntityAuditProvider
     {
         private readonly Func<TEntity, AuditLogEntry> _map;
 
-        public AuditConfig(Func<TEntity, AuditLogEntry> map)
+        public EntityAuditProvider(Func<TEntity, AuditLogEntry> map)
         {
             ArgumentNullException.ThrowIfNull(_map);
             _map = map;
         }
 
-        public AuditLogEntry Map(TEntity entity)
+        public Type TargetEntity => typeof(TEntity);
+
+        public AuditLogEntry GetAudit(TEntity entity)
         {
             ArgumentNullException.ThrowIfNull(entity);
             return _map(entity);
         }
+
+        AuditLogEntry IEntityAuditProvider.GetAudit(object entity) => GetAudit((TEntity)entity);
     }
 }
